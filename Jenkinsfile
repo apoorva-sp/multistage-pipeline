@@ -1,47 +1,62 @@
 pipeline {
     agent any
 
+    environment {
+        VENV_DIR = "${WORKSPACE}/.venv"
+        PY = "${WORKSPACE}/.venv/bin/python"
+        PIP = "${WORKSPACE}/.venv/bin/pip"
+    }
+
     stages {
         stage('Build') {
             steps {
-                echo 'Creating virtual environment and installing dependencies...'
+                echo 'Creating virtual environment and installing dependencies in workspace...'
                 sh '''
                 set -e
-                python3 -m venv venv || true
-                . venv/bin/activate
-                pip install --upgrade pip
-                pip install -r requirements.txt
+                python3 -m venv "${VENV_DIR}" || true
+                "${PY}" -m pip install --upgrade pip
+                "${PIP}" install -r requirements.txt
                 '''
             }
         }
+
         stage('Test') {
             steps {
-                echo 'Running unit tests...'
-                sh 'python3 -m unittest discover -s .'
+                echo 'Running unit tests with venv python...'
+                sh '''
+                set -e
+                "${PY}" -m unittest discover -s .
+                '''
             }
         }
+
         stage('Deploy') {
             steps {
                 echo 'Deploying application...'
                 sh '''
-                mkdir -p ${WORKSPACE}/python-app-deploy
-                cp ${WORKSPACE}/app.py ${WORKSPACE}/python-app-deploy/
+                mkdir -p "${WORKSPACE}/python-app-deploy"
+                cp "${WORKSPACE}/app.py" "${WORKSPACE}/python-app-deploy/"
                 '''
             }
         }
+
         stage('Run Application') {
             steps {
-                echo 'Starting application in background...'
+                echo 'Starting application with venv python...'
                 sh '''
-                nohup python3 ${WORKSPACE}/python-app-deploy/app.py > ${WORKSPACE}/python-app-deploy/app.log 2>&1 &
-                echo $! > ${WORKSPACE}/python-app-deploy/app.pid
+                nohup "${PY}" "${WORKSPACE}/python-app-deploy/app.py" > "${WORKSPACE}/python-app-deploy/app.log" 2>&1 &
+                echo $! > "${WORKSPACE}/python-app-deploy/app.pid"
                 '''
             }
         }
+
         stage('Test Application') {
             steps {
-                echo 'Running integration test against the deployed app...'
-                sh 'python3 ${WORKSPACE}/test_app.py'
+                echo 'Running integration tests with venv python...'
+                sh '''
+                set -e
+                "${PY}" "${WORKSPACE}/test_app.py"
+                '''
             }
         }
     }
